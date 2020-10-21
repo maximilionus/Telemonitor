@@ -292,3 +292,33 @@ class TM_Config:
             any_deprecated,
             special_check
         )
+
+
+class ConfigurationFile:
+    """ New implementation of config file interaction layer """
+    def __init__(self):
+        self.cfg_dict = self.read_dict()
+
+    @staticmethod
+    def is_exist() -> bool:
+        """ Check configuration file existence.
+
+        Returns:
+            bool:
+                True - Config file exists.
+                False - Config file doesn't exist.
+        """
+        return True if path.isfile(constants.PATH_CFG) else False
+
+    @classmethod
+    def read_dict(cls) -> dict:
+        """ Get json configuration file values.
+
+        Returns:
+            dict: Parsed configuration json file.
+        """
+        if cls.is_exist():
+            with open(constants.PATH_CFG, 'rt') as f:
+                config = json.load(f)
+
+        return config
