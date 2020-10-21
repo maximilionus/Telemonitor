@@ -1,6 +1,7 @@
 import json
 from logging import getLogger
 from os import path, makedirs
+from types import SimpleNamespace
 
 from . import constants
 from .cli import tm_colorama, print_action
@@ -297,7 +298,52 @@ class TM_Config:
 class ConfigurationFile:
     """ New implementation of config file interaction layer """
     def __init__(self):
-        self.cfg_dict = self.read_dict()
+        self.refresh()
+
+    def refresh(self):
+        """ Refresh configuration file values from json """
+        self.__dict__.update(**self.read_json_as_namespace().__dict__)
+
+    def commit(self) -> bool:
+        """ Commit all changes from object to json configuration file """
+        def recursive_commit(dict_obj: dict, dict_file: dict) -> bool:
+            """ Recursively commit all changes from object dict to configuration file
+
+            Args:
+                dict_obj (dict)
+                dict_file (dict)
+
+            Returns:
+                bool: Was anything commited to `dict_file`
+            """
+            was_commited = False
+
+            for key_file, value_file in dict_file.items():
+                if type(value_file) == dict:
+                    was_commited = recursive_commit(value_file, dict_obj[key_file])
+                else:
+                    if value_file != dict_obj[key_file]:
+                        value_file = dict_obj[key_file]
+                        was_commited = True
+                        logger.debug(f"Commited {key_file}:{value_file} to configuration file")
+
+            return was_commited
+
+        config_file_dict = self.read_json_as_dict()
+        object_dict = self.__namespace2dict(self)
+
+        recursive_commit(object_dict, config_file_dict)
+
+    @classmethod
+    def __namespace2dict(cls, namespace_from, dict_to={}) -> dict:
+        for k, v in namespace_from.__dict__.items():
+            if type(v) == SimpleNamespace:
+                dict_to[k] = {}
+                cls.__namespace2dict(v, dict_to[k])
+            else:
+                dict_to.setdefault(k, v)
+
+        return dict_to
 
     @staticmethod
     def is_exist() -> bool:
@@ -311,14 +357,27 @@ class ConfigurationFile:
         return True if path.isfile(constants.PATH_CFG) else False
 
     @classmethod
-    def read_dict(cls) -> dict:
-        """ Get json configuration file values.
+    def create_file(cls):
+        """ Create new configuration file """
+        cls.write_to_file(constants.DEF_CFG)
+        logger.info("Successfuly generated new configuration file")
 
-        Returns:
-            dict: Parsed configuration json file.
-        """
-        if cls.is_exist():
-            with open(constants.PATH_CFG, 'rt') as f:
-                config = json.load(f)
+    @staticmethod
+    def write_to_file(config: dict):
+        with open(constants.PATH_CFG, 'wt') as f:
+            json.dump(config, f, indent=4)
+        logger.debug("Successful write to file action")
+
+    @classmethod
+    def read_json_as_dict(cls) -> dict:
+        with open(constants.PATH_CFG, 'rt') as f:
+            config = json.load(f)
 
         return config
+
+    @classmethod
+    def read_json_as_namespace(cls) -> object:
+        with open(constants.PATH_CFG, 'rt') as f:
+            namespace = json.load(f, object_hook=lambda d: SimpleNamespace(**d))
+
+        return namespace
