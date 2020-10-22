@@ -320,20 +320,24 @@ class ConfigurationFile:
 
             for key_file, value_file in dict_file.items():
                 if type(value_file) == dict:
-                    was_commited = recursive_commit(dict_obj[key_file], dict_file[key_file])
-                else:
-                    print(f'file: {value_file}\nobj: {dict_obj[key_file]}\n\n')
-                    if value_file != dict_obj[key_file]:
-                        dict_file[key_file] = dict_obj[key_file]
-                        was_commited = True
-                        logger.debug(f"Commited {key_file}:{value_file} to configuration file")
+                    was_commited ^= recursive_commit(dict_obj[key_file], dict_file[key_file])
+
+                elif value_file != dict_obj[key_file]:
+                    dict_file[key_file] = dict_obj[key_file]
+                    was_commited = True
+                    logger.debug(f"Commited {key_file}:{value_file} to configuration file")
 
             return was_commited
 
         config_file_dict = self.read_json_as_dict()
         object_dict = self.__namespace2dict(self)
 
-        return recursive_commit(object_dict, config_file_dict)
+        commit_result = recursive_commit(object_dict, config_file_dict)
+        if commit_result:
+            self.write_to_file(config_file_dict)
+            logger.debug("Successfully applied all object changes to local configuration file")
+
+        return commit_result
 
     @classmethod
     def __namespace2dict(cls, namespace_from, dict_to={}) -> dict:
@@ -342,7 +346,7 @@ class ConfigurationFile:
                 dict_to[k] = {}
                 cls.__namespace2dict(v, dict_to[k])
             else:
-                dict_to.setdefault(k, v)
+                dict_to.update({k: v})
 
         return dict_to
 
